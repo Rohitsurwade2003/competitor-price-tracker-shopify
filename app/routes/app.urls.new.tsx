@@ -1,23 +1,43 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useActionData, useNavigation, useNavigate, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useNavigation, useNavigate, useSubmit } from "react-router";
 import { useState, useEffect } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { addUrl } from "../api.server";
+import { addUrl, getDashboard } from "../api.server";
+import { getPlanLimit } from "../billing.server";
+
+// ShopUser type with plan field (populated after `prisma generate`)
+type ShopUserRecord = { id: string; shop: string; apiUserId: string; plan: string; createdAt: Date };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+  const { session } = await authenticate.admin(request);
+  const shopUser = (await prisma.shopUser.findUnique({
+    where: { shop: session.shop },
+  })) as ShopUserRecord | null;
+  const plan = shopUser?.plan ?? "free";
+  const planLimit = getPlanLimit(plan);
+  const urls = shopUser ? await getDashboard(shopUser.apiUserId) : [];
+  return { plan, planLimit, urlCount: urls.length };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shopUser = await prisma.shopUser.findUnique({
+  const shopUser = (await prisma.shopUser.findUnique({
     where: { shop: session.shop },
-  });
+  })) as ShopUserRecord | null;
   if (!shopUser) return { error: "User not found. Please reinstall the app." };
+
+  // Enforce plan URL limit
+  const planLimit = getPlanLimit(shopUser.plan);
+  const existingUrls = await getDashboard(shopUser.apiUserId);
+  if (existingUrls.length >= planLimit) {
+    return {
+      error: `You've reached your ${shopUser.plan} plan limit of ${planLimit} URLs. Upgrade your plan in Settings to add more.`,
+      limitReached: true,
+    };
+  }
 
   const formData = await request.formData();
   const url = String(formData.get("url")).trim();
@@ -42,11 +62,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function AddUrl() {
+  const { plan, planLimit, urlCount } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const navigate = useNavigate();
   const submit = useSubmit();
   const isSubmitting = navigation.state === "submitting";
+  const atLimit = urlCount >= planLimit;
 
   const shopify = useAppBridge();
   const [url, setUrl] = useState("");
@@ -79,10 +101,40 @@ export default function AddUrl() {
       </s-button>
 
       <s-section heading="Competitor URL Details">
+        <div style={{ fontSize: "13px", color: "#6d7175", marginBottom: "12px" }}>
+          {urlCount} / {planLimit} URLs used ({plan} plan)
+          {atLimit && (
+            <span style={{ marginLeft: "8px", color: "#c0392b", fontWeight: 600 }}>
+              — Limit reached.{" "}
+              <a href="/app/settings" style={{ color: "#2c6ecb" }}>
+                Upgrade
+              </a>
+            </span>
+          )}
+        </div>
+
         {actionData?.error && (
-          <s-paragraph>
-            <s-text tone="critical">{actionData.error}</s-text>
-          </s-paragraph>
+          <div
+            style={{
+              background: "#fff4f4",
+              border: "1px solid #ffd2d2",
+              borderRadius: "6px",
+              padding: "10px 14px",
+              marginBottom: "12px",
+              fontSize: "14px",
+              color: "#c0392b",
+            }}
+          >
+            {actionData.error}
+            {actionData.limitReached && (
+              <span>
+                {" "}
+                <a href="/app/settings" style={{ color: "#2c6ecb" }}>
+                  Go to Settings →
+                </a>
+              </span>
+            )}
+          </div>
         )}
 
         <form onSubmit={handleSubmit}>
@@ -150,6 +202,7 @@ export default function AddUrl() {
               type="submit"
               variant="primary"
               {...(isSubmitting ? { loading: true } : {})}
+              {...(atLimit ? { disabled: true } : {})}
             >
               {isSubmitting ? "Adding..." : "Add URL"}
             </s-button>

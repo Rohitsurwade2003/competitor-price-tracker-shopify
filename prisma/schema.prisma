@@ -17,6 +17,7 @@ model ShopUser {
   id        String   @id @default(cuid())
   shop      String   @unique
   apiUserId String
+  plan      String   @default("free")
   createdAt DateTime @default(now())
 }
 

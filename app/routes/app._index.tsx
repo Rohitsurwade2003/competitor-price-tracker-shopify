@@ -10,15 +10,20 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { getDashboard, triggerScrape, type TrackedUrl } from "../api.server";
+import { getPlanLimit } from "../billing.server";
+
+// ShopUser type with plan field (populated after `prisma generate`)
+type ShopUserRecord = { id: string; shop: string; apiUserId: string; plan: string; createdAt: Date };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const shopUser = await prisma.shopUser.findUnique({
+  const shopUser = (await prisma.shopUser.findUnique({
     where: { shop: session.shop },
-  });
-  if (!shopUser) return { urls: [] as TrackedUrl[], userId: null };
+  })) as ShopUserRecord | null;
+  if (!shopUser) return { urls: [] as TrackedUrl[], userId: null, plan: "free", planLimit: 3 };
   const urls = await getDashboard(shopUser.apiUserId);
-  return { urls, userId: shopUser.apiUserId };
+  const plan = shopUser.plan ?? "free";
+  return { urls, userId: shopUser.apiUserId, plan, planLimit: getPlanLimit(plan) };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -70,10 +75,11 @@ function AvailabilityBadge({ availability }: { availability?: string | null }) {
 }
 
 export default function Dashboard() {
-  const { urls } = useLoaderData<typeof loader>();
+  const { urls, plan, planLimit } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const shopify = useAppBridge();
+  const atLimit = urls.length >= planLimit;
 
   useEffect(() => {
     if (fetcher.data?.ok) {
@@ -90,6 +96,15 @@ export default function Dashboard() {
       >
         + Track New URL
       </s-button>
+
+      <div slot="subtitle" style={{ fontSize: "13px", color: "#6d7175" }}>
+        {urls.length} / {planLimit} URLs tracked · {plan} plan
+        {atLimit && (
+          <a href="/app/settings" style={{ marginLeft: "8px", color: "#2c6ecb", fontWeight: 600 }}>
+            Upgrade →
+          </a>
+        )}
+      </div>
 
       {urls.length === 0 ? (
         <s-section>

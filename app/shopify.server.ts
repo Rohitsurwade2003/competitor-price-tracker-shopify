@@ -2,6 +2,7 @@ import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
@@ -18,6 +19,23 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   future: {
     expiringOfflineAccessTokens: true,
+  },
+  billing: {
+    Starter: {
+      amount: 4.99,
+      currencyCode: "USD",
+      interval: BillingInterval.Every30Days,
+    },
+    Growth: {
+      amount: 14.99,
+      currencyCode: "USD",
+      interval: BillingInterval.Every30Days,
+    },
+    Pro: {
+      amount: 54.99,
+      currencyCode: "USD",
+      interval: BillingInterval.Every30Days,
+    },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
