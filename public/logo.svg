@@ -1,0 +1,9 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="192" fill="#1A73E8"/>
+  <rect x="208" y="304" width="608" height="96" rx="48" fill="white"/>
+  <rect x="208" y="448" width="480" height="96" rx="48" fill="white"/>
+  <rect x="208" y="592" width="352" height="96" rx="48" fill="white"/>
+  <line x1="752" y1="304" x2="752" y2="688" stroke="#FFD700" stroke-width="64" stroke-linecap="round"/>
+  <circle cx="752" cy="736" r="72" fill="#FFD700"/>
+  <text x="200" y="180" font-family="Inter, sans-serif" font-size="120" fill="white">₱</text>
+</svg>
