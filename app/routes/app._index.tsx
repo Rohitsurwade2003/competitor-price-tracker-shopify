@@ -9,7 +9,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { getDashboard, triggerScrape, type TrackedUrl } from "../api.server";
+import { getDashboard, triggerScrape, deleteUrl, type TrackedUrl } from "../api.server";
 import { getPlanLimit } from "../billing.server";
 
 // ShopUser type with plan field (populated after `prisma generate`)
@@ -34,8 +34,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!shopUser) throw new Error("User not found");
   const formData = await request.formData();
   const urlId = String(formData.get("urlId"));
-  await triggerScrape(urlId, shopUser.apiUserId);
-  return { ok: true };
+  const intent = String(formData.get("intent"));
+  if (intent === "delete") {
+    await deleteUrl(urlId);
+  } else {
+    await triggerScrape(urlId, shopUser.apiUserId);
+  }
+  return { ok: true, intent };
 };
 
 function PriceBadge({ price, currency }: { price?: number | null; currency?: string | null }) {
@@ -88,7 +93,7 @@ export default function Dashboard() {
   }, [fetcher.data, shopify]);
 
   return (
-    <s-page heading="Competitor Price Tracker">
+    <s-page heading="RivalSense">
       <s-button
         slot="primary-action"
         variant="primary"
@@ -109,7 +114,7 @@ export default function Dashboard() {
       {urls.length === 0 ? (
         <s-section>
           <div style={{ textAlign: "center", padding: "48px 0" }}>
-            <img src="/logo.svg" alt="Competitor Price Tracker" style={{ width: "80px", height: "80px", marginBottom: "12px", borderRadius: "16px" }} />
+            <img src="/logo.svg" alt="RivalSense" style={{ width: "80px", height: "80px", marginBottom: "12px", borderRadius: "16px" }} />
             <div style={{ fontSize: "18px", fontWeight: 600, marginBottom: "8px", color: "#202223" }}>
               No competitor URLs tracked yet
             </div>
@@ -154,6 +159,7 @@ export default function Dashboard() {
                 <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                   <fetcher.Form method="post" style={{ display: "inline" }}>
                     <input type="hidden" name="urlId" value={item.id} />
+                    <input type="hidden" name="intent" value="scrape" />
                     <button
                       type="submit"
                       style={{
@@ -175,6 +181,20 @@ export default function Dashboard() {
                   >
                     View History
                   </button>
+                  <fetcher.Form method="post" style={{ display: "inline" }} onSubmit={(e) => { if (!confirm("Remove this URL from tracking?")) e.preventDefault(); }}>
+                    <input type="hidden" name="urlId" value={item.id} />
+                    <input type="hidden" name="intent" value="delete" />
+                    <button
+                      type="submit"
+                      style={{
+                        padding: "6px 14px", borderRadius: "6px", border: "1px solid #d72c0d",
+                        background: "white", cursor: "pointer", fontSize: "13px", fontWeight: 500,
+                        color: "#d72c0d",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </fetcher.Form>
                 </div>
               </div>
             </div>

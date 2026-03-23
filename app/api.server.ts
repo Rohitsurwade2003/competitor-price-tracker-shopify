@@ -72,6 +72,12 @@ export async function getPriceHistory(urlId: string): Promise<PricePoint[]> {
   return res.json();
 }
 
+export async function deleteUrl(urlId: string) {
+  const res = await fetch(`${API_URL}/api/urls/${urlId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`deleteUrl failed: ${res.status}`);
+  return res.json();
+}
+
 export async function triggerScrape(competitorUrlId: string, userId: string) {
   const res = await fetch(`${API_URL}/api/scrape`, {
     method: "POST",
